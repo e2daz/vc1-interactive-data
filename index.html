@@ -29,9 +29,16 @@
         <span>Find a team</span>
         <input id="team-filter" type="search" placeholder="Search teams" autocomplete="off">
       </label>
+      <label>
+        <span>Attendance scale</span>
+        <select id="attendance-mode">
+          <option value="raw">Average attendance</option>
+          <option value="capacity">% of arena capacity</option>
+        </select>
+      </label>
       <label class="toggle-control">
         <span>Data filter</span>
-        <span class="toggle-label"><input id="exclude-covid" type="checkbox" checked> Exclude 2020-21 COVID season</span>
+        <span class="toggle-label"><input id="exclude-covid" type="checkbox" checked> Exclude 2020-21 and 2021-22 COVID seasons</span>
       </label>
       <button id="reset-button" type="button">Reset view</button>
     </section>
@@ -39,7 +46,7 @@
     <section class="summary-grid" aria-label="Dataset summary">
       <div><span class="metric-label">Teams shown</span><strong id="teams-count">--</strong></div>
       <div><span class="metric-label">Season games</span><strong id="games-count">--</strong></div>
-      <div><span class="metric-label">Average attendance</span><strong id="league-attendance">--</strong></div>
+      <div><span class="metric-label" id="attendance-metric-label">Average attendance</span><strong id="league-attendance">--</strong></div>
       <div><span class="metric-label">Correlation</span><strong id="correlation">--</strong></div>
     </section>
 
@@ -49,13 +56,21 @@
         <p class="hint">Click a dot to trace that team below. Hover for the exact values.</p>
       </div>
       <div id="scatter-chart" class="chart-wrap"></div>
+      <div class="season-slider">
+        <label for="season-slider">Browse seasons <output id="season-slider-value"></output></label>
+        <input id="season-slider" type="range" min="0" max="0" step="1" value="0">
+      </div>
       <p class="footnote">Each dot is a team in the selected season. Attendance uses the annual sources for 2000-01 through 2025-26; seasons outside those sources are omitted.</p>
+      <details class="coverage-note">
+        <summary id="arena-coverage-summary">Arena capacity coverage</summary>
+        <p id="arena-coverage"></p>
+      </details>
     </section>
 
     <section class="viz-card secondary-card">
       <div class="section-heading">
         <div><p class="kicker">The long view</p><h2 id="timeline-title">Select a team</h2></div>
-        <p class="hint">Attendance uses the left axis. Wins use the right axis.</p>
+        <p class="hint">Bar height shows attendance. Color shows wins: red is low, green is high.</p>
       </div>
       <div id="timeline-chart" class="chart-wrap"></div>
     </section>

@@ -1,7 +1,8 @@
 const formatNumber = d3.format(",.0f");
 const formatDecimal = d3.format(".2f");
+const formatPercentage = d3.format(".1f");
 const tooltip = d3.select("#tooltip");
-const state = { selectedTeamId: null, search: "", season: null, excludeCovid: true };
+const state = { selectedTeamId: null, search: "", season: null, excludeCovid: true, attendanceMode: "raw" };
 
 function showTooltip(event, html) {
   tooltip.html(html).attr("aria-hidden", "false").style("opacity", 1);
@@ -26,7 +27,20 @@ function normalizeTeamName(name) {
   return aliases[name] || name;
 }
 function teamColor(name) { return TEAM_COLORS[normalizeTeamName(name)] || "#147d7b"; }
-function filteredRecords() { return allRecords.filter(record => !state.excludeCovid || record.season !== "2020-21"); }
+function filteredRecords() {
+  const covidSeasons = new Set(["2020-21", "2021-22"]);
+  return allRecords.filter(record => !state.excludeCovid || !covidSeasons.has(record.season));
+}
+function metricValue(record) { return state.attendanceMode === "capacity" ? record.attendancePercentage : record.attendance; }
+function metricLabel() { return state.attendanceMode === "capacity" ? "% of arena capacity" : "Average home attendance"; }
+function metricFormat(value) { return state.attendanceMode === "capacity" ? `${formatPercentage(value)}%` : formatNumber(value); }
+function seasonOptions() {
+  return [...new Set(filteredRecords().filter(d => d.attendance !== null).map(d => d.season))]
+    .sort((a, b) => d3.ascending(a, b));
+}
+function winsColor(wins) {
+  return d3.scaleLinear().domain([20, 60]).range(["#d94841", "#2f9e44"]).clamp(true)(wins);
+}
 
 function buildRecords(games) {
   const records = new Map();
@@ -70,77 +84,139 @@ function applyAnnualAttendance(records, annualRows, newerRows) {
   });
 }
 
+function parseArenaRows(text) {
+  const knownTeams = Object.keys(TEAM_COLORS);
+  const seasonPattern = /;\s*(\d{4})\s*;\s*\d{4}\s*[^\d\s]\s*[0-9０-９]{2,4}/;
+  return text.replace(/^\uFEFF/, "").trim().split(/\r?\n/).slice(1).map(line => {
+    const fields = line.split(";").map(value => value.trim());
+    const team = knownTeams.find(name => line.includes(name)) ||
+      (line.includes("Los Angeles Clippers") ? "LA Clippers" : null);
+    const capacityMatch = line.match(/(?:^|[; ])(\d{4,5})(?:;|\s*;|$)/);
+    const seasonMatch = line.replace(/[０-９]/g, digit => String(digit.charCodeAt(0) - "０".charCodeAt(0))).match(seasonPattern);
+    return {
+      team,
+      arena: fields[0] || null,
+      capacity: capacityMatch ? +capacityMatch[1] : null,
+      startSeason: seasonMatch ? +seasonMatch[1] : null,
+      endSeason: null
+    };
+  }).filter(row => row.team && Number.isFinite(row.capacity));
+}
+
+function applyArenaCapacity(records, arenaRows) {
+  return records.map(record => {
+    const arena = arenaRows.find(row => row.team === normalizeTeamName(record.name));
+    const inUsagePeriod = arena && Number.isFinite(arena.startSeason) && record.seasonStart >= arena.startSeason &&
+      (!Number.isFinite(arena.endSeason) || record.seasonStart <= arena.endSeason);
+    return {
+      ...record,
+      arena: inUsagePeriod ? arena.arena : null,
+      arenaCapacity: inUsagePeriod ? arena.capacity : null,
+      attendancePercentage: inUsagePeriod && record.attendance !== null ? record.attendance / arena.capacity * 100 : null
+    };
+  });
+}
+
+function updateArenaCoverage(records, arenaRows) {
+  const attendanceRecords = records.filter(record => record.attendance !== null);
+  const covered = attendanceRecords.filter(record => record.attendancePercentage !== null).length;
+  const missing = d3.group(attendanceRecords.filter(record => record.attendancePercentage === null), record => normalizeTeamName(record.name));
+  const gaps = [...missing].map(([team, teamRecords]) => {
+    const seasons = teamRecords.map(record => record.season).sort();
+    return `${team}: ${seasons.join(", ")}`;
+  });
+  d3.select("#arena-coverage-summary").text(`Arena capacity coverage: ${covered}/${attendanceRecords.length} team-seasons (${formatPercentage(covered / attendanceRecords.length * 100)}%)`);
+  d3.select("#arena-coverage").text(gaps.length ? `Missing capacity by team and season:\n${gaps.join("\n")}` : "Every team-season with annual attendance has a valid arena capacity.");
+}
+
 function correlation(data) {
   if (data.length < 2) return null;
-  const x = d3.mean(data, d => d.wins), y = d3.mean(data, d => d.attendance);
-  const numerator = d3.sum(data, d => (d.wins - x) * (d.attendance - y));
-  const denominator = Math.sqrt(d3.sum(data, d => (d.wins - x) ** 2) * d3.sum(data, d => (d.attendance - y) ** 2));
+  const x = d3.mean(data, d => d.wins), y = d3.mean(data, metricValue);
+  const numerator = d3.sum(data, d => (d.wins - x) * (metricValue(d) - y));
+  const denominator = Math.sqrt(d3.sum(data, d => (d.wins - x) ** 2) * d3.sum(data, d => (metricValue(d) - y) ** 2));
   return denominator ? numerator / denominator : null;
 }
 
 function chartSize(selector, minHeight) { const node = document.querySelector(selector); return { width: Math.max(300, node.clientWidth), height: minHeight }; }
 function drawScatter(records) {
-  const usable = records.filter(d => d.attendance !== null && (!state.search || d.name.toLowerCase().includes(state.search.toLowerCase())));
+  const usable = records.filter(d => metricValue(d) !== null && (!state.search || d.name.toLowerCase().includes(state.search.toLowerCase())));
   const { width, height } = chartSize("#scatter-chart", window.innerWidth < 700 ? 330 : 410);
   const margin = { top: 18, right: 20, bottom: 54, left: 64 }, innerWidth = width - margin.left - margin.right, innerHeight = height - margin.top - margin.bottom;
   d3.select("#scatter-chart").selectAll("*").remove();
   const svg = d3.select("#scatter-chart").append("svg").attr("viewBox", `0 0 ${width} ${height}`).attr("width", "100%").attr("height", height);
   const chart = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
   const x = d3.scaleLinear().domain([0, d3.max(usable, d => d.wins) + 2 || 1]).nice().range([0, innerWidth]);
-  const y = d3.scaleLinear().domain([0, d3.max(usable, d => d.attendance) * 1.08 || 1]).nice().range([innerHeight, 0]);
+  const yDomain = state.attendanceMode === "capacity" ? [60, 105] : [10000, 22000];
+  const y = d3.scaleLinear().domain(yDomain).range([innerHeight, 0]);
   chart.append("g").attr("class", "grid").call(d3.axisLeft(y).tickSize(-innerWidth).tickFormat(""));
   chart.append("g").attr("class", "axis").attr("transform", `translate(0,${innerHeight})`).call(d3.axisBottom(x).ticks(8));
-  chart.append("g").attr("class", "axis").call(d3.axisLeft(y).ticks(6).tickFormat(d => d3.format(",.0f")(d)));
+  chart.append("g").attr("class", "axis").call(d3.axisLeft(y).ticks(6).tickFormat(d => state.attendanceMode === "capacity" ? `${d3.format(".0f")(d)}%` : d3.format(",.0f")(d)));
   chart.append("text").attr("class", "axis-title").attr("x", innerWidth / 2).attr("y", innerHeight + 43).attr("text-anchor", "middle").text("Regular-season wins");
-  chart.append("text").attr("class", "axis-title").attr("transform", "rotate(-90)").attr("x", -innerHeight / 2).attr("y", -45).attr("text-anchor", "middle").text("Average home attendance");
-  chart.selectAll(".dot").data(usable, d => d.id).join("circle").attr("class", d => `dot ${state.selectedTeamId === d.id ? "selected" : ""}`).attr("fill", d => teamColor(d.name)).attr("cx", d => x(d.wins)).attr("cy", d => y(d.attendance)).attr("r", d => 5 + Math.sqrt(d.attendanceGames)).on("mouseenter", (event, d) => showTooltip(event, `<strong>${d.name}</strong>${d.wins} wins &middot; ${formatNumber(d.attendance)} average attendance<br>${d.attendanceGames} reported home games &middot; ${d.attendanceSource}`)).on("mousemove", (event) => showTooltip(event, tooltip.html())).on("mouseleave", hideTooltip).on("click", (_, d) => { state.selectedTeamId = d.id; drawScatter(records); drawTimeline(filteredRecords()); });
+  chart.append("text").attr("class", "axis-title").attr("transform", "rotate(-90)").attr("x", -innerHeight / 2).attr("y", -45).attr("text-anchor", "middle").text(metricLabel());
+  chart.selectAll(".dot").data(usable, d => d.id).join("circle").attr("class", d => `dot ${state.selectedTeamId === d.id ? "selected" : ""}`).attr("fill", d => teamColor(d.name)).attr("cx", d => x(d.wins)).attr("cy", d => y(metricValue(d))).attr("r", d => 5 + Math.sqrt(d.attendanceGames)).on("mouseenter", (event, d) => showTooltip(event, `<strong>${d.name}</strong>${d.wins} wins &middot; ${metricFormat(metricValue(d))}${state.attendanceMode === "capacity" ? " of arena capacity" : " average attendance"}<br>${formatNumber(d.attendance)} raw average attendance${d.arenaCapacity ? `<br>${d.arena} capacity: ${formatNumber(d.arenaCapacity)}` : "<br>No arena capacity available for this season"}`)).on("mousemove", (event) => showTooltip(event, tooltip.html())).on("mouseleave", hideTooltip).on("click", (_, d) => { state.selectedTeamId = d.id; drawScatter(records); drawTimeline(filteredRecords()); });
 }
 
 function drawTimeline(records) {
   const teamId = state.selectedTeamId;
   const teamName = records.find(d => d.id === teamId)?.name;
   d3.select("#timeline-title").text(teamName ? `${teamName} across seasons` : "Select a team");
-  const usable = records.filter(d => d.id === teamId && d.attendance !== null).sort((a, b) => a.seasonStart - b.seasonStart);
+  const usable = records.filter(d => d.id === teamId && metricValue(d) !== null).sort((a, b) => a.seasonStart - b.seasonStart);
   const { width, height } = chartSize("#timeline-chart", window.innerWidth < 700 ? 280 : 320);
-  const margin = { top: 22, right: 58, bottom: 48, left: 62 }, innerWidth = width - margin.left - margin.right, innerHeight = height - margin.top - margin.bottom;
+  const margin = { top: 34, right: 20, bottom: 64, left: 62 }, innerWidth = width - margin.left - margin.right, innerHeight = height - margin.top - margin.bottom;
   d3.select("#timeline-chart").selectAll("*").remove();
   if (!usable.length) { d3.select("#timeline-chart").append("p").style("padding", "90px 0 0 20px").style("color", "#6d7a7e").text("Click a team in the scatterplot to see its history."); return; }
   const svg = d3.select("#timeline-chart").append("svg").attr("viewBox", `0 0 ${width} ${height}`).attr("width", "100%").attr("height", height);
   const chart = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
-  const x = d3.scalePoint().domain(usable.map(d => d.season)).range([0, innerWidth]).padding(.5);
-  const yAttendance = d3.scaleLinear().domain([0, d3.max(usable, d => d.attendance) * 1.1]).nice().range([innerHeight, 0]);
-  const yWins = d3.scaleLinear().domain([0, 82]).range([innerHeight, 0]);
+  const x = d3.scaleBand().domain(usable.map(d => d.season)).range([0, innerWidth]).padding(.16);
+  const yAttendance = d3.scaleLinear().domain([0, d3.max(usable, metricValue) * 1.1]).nice().range([innerHeight, 0]);
   chart.append("g").attr("class", "grid").call(d3.axisLeft(yAttendance).tickSize(-innerWidth).tickFormat(""));
   chart.append("g").attr("class", "axis").attr("transform", `translate(0,${innerHeight})`).call(d3.axisBottom(x).tickValues(usable.filter((_, i) => i % Math.ceil(usable.length / 8) === 0).map(d => d.season)));
-  chart.append("g").attr("class", "axis").call(d3.axisLeft(yAttendance).ticks(5).tickFormat(d3.format(",.0f")));
-  chart.append("g").attr("class", "axis").attr("transform", `translate(${innerWidth},0)`).call(d3.axisRight(yWins).ticks(5));
-  chart.append("path").datum(usable).attr("class", "line-attendance").attr("stroke", teamColor(usable[0].name)).attr("d", d3.line().x(d => x(d.season)).y(d => yAttendance(d.attendance)));
-  chart.append("path").datum(usable).attr("class", "line-wins").attr("d", d3.line().x(d => x(d.season)).y(d => yWins(d.wins)));
-  chart.selectAll(".timeline-point").data(usable).join("circle").attr("class", "timeline-point").attr("fill", d => teamColor(d.name)).attr("cx", d => x(d.season)).attr("cy", d => yAttendance(d.attendance)).attr("r", 5).on("mouseenter", (event, d) => showTooltip(event, `<strong>${d.season}</strong>${d.wins} wins &middot; ${formatNumber(d.attendance)} average attendance<br>${d.attendanceSource}`)).on("mouseleave", hideTooltip);
-  const legend = svg.append("g").attr("class", "legend").attr("transform", `translate(${margin.left},10)`);
-  legend.append("line").attr("x1", 0).attr("x2", 22).attr("stroke", "#147d7b").attr("stroke-width", 3); legend.append("text").attr("x", 28).text("attendance");
-  legend.append("line").attr("x1", 120).attr("x2", 142).attr("stroke", "#e66d54").attr("stroke-dasharray", "5 4").attr("stroke-width", 2); legend.append("text").attr("x", 148).text("wins");
+  chart.append("g").attr("class", "axis").call(d3.axisLeft(yAttendance).ticks(5).tickFormat(d => state.attendanceMode === "capacity" ? `${d3.format(".0f")(d)}%` : d3.format(",.0f")(d)));
+  chart.selectAll(".timeline-bar").data(usable).join("rect").attr("class", "timeline-bar")
+    .attr("x", d => x(d.season)).attr("y", d => yAttendance(metricValue(d)))
+    .attr("width", x.bandwidth()).attr("height", d => innerHeight - yAttendance(metricValue(d)))
+    .attr("fill", d => winsColor(d.wins))
+    .on("mouseenter", (event, d) => showTooltip(event, `<strong>${d.season}</strong>${d.wins} wins &middot; ${metricFormat(metricValue(d))}<br>${formatNumber(d.attendance)} raw average attendance${d.arenaCapacity ? `<br>${d.arena} capacity: ${formatNumber(d.arenaCapacity)}` : "<br>No arena capacity available for this season"}`))
+    .on("mouseleave", hideTooltip);
+  const legend = svg.append("g").attr("class", "wins-legend").attr("transform", `translate(${margin.left},10)`);
+  const gradient = d3.scaleLinear().domain([20, 60]).range(["#d94841", "#2f9e44"]);
+  legend.append("rect").attr("x", 0).attr("y", 0).attr("width", 130).attr("height", 8).attr("fill", "url(#wins-gradient)");
+  const defs = svg.append("defs");
+  const linearGradient = defs.append("linearGradient").attr("id", "wins-gradient");
+  linearGradient.append("stop").attr("offset", "0%").attr("stop-color", gradient(20));
+  linearGradient.append("stop").attr("offset", "100%").attr("stop-color", gradient(60));
+  legend.append("text").attr("x", 0).attr("y", 22).text("20 wins");
+  legend.append("text").attr("x", 130).attr("y", 22).attr("text-anchor", "end").text("60+ wins");
 }
 
 let allRecords = [];
 async function init() {
-  const [games, annualRows, newerAttendanceText] = await Promise.all([d3.csv("data/nba_games_detail.csv"), d3.csv("data/nba_avg_attendance_2000-2015.csv"), d3.text("data/nba_avg_attendance_2016-2026.csv")]);
-  allRecords = applyAnnualAttendance(buildRecords(games), annualRows, d3.csvParseRows(newerAttendanceText));
+  const [games, annualRows, newerAttendanceText, arenaText] = await Promise.all([d3.csv("data/nba_games_detail.csv"), d3.csv("data/nba_avg_attendance_2000-2015.csv"), d3.text("data/nba_avg_attendance_2016-2026.csv"), d3.text("data/current_arenas.csv")]);
+  allRecords = applyArenaCapacity(applyAnnualAttendance(buildRecords(games), annualRows, d3.csvParseRows(newerAttendanceText)), parseArenaRows(arenaText));
+  updateArenaCoverage(allRecords, parseArenaRows(arenaText));
   state.season = [...new Set(allRecords.filter(d => d.attendance !== null).map(d => d.season))].sort((a, b) => d3.descending(a, b))[0];
   updateSeasonOptions();
   d3.select("#season-select").on("change", event => { state.season = event.target.value; state.selectedTeamId = null; render(); });
+  d3.select("#season-slider").on("input", event => {
+    state.season = seasonOptions()[+event.target.value];
+    state.selectedTeamId = null;
+    d3.select("#season-select").property("value", state.season);
+    render();
+  });
   d3.select("#team-filter").on("input", event => { state.search = event.target.value; state.selectedTeamId = null; render(); });
+  d3.select("#attendance-mode").on("change", event => { state.attendanceMode = event.target.value; render(); });
   d3.select("#exclude-covid").on("change", event => { state.excludeCovid = event.target.checked; state.selectedTeamId = null; updateSeasonOptions(); render(); });
-  d3.select("#reset-button").on("click", () => { state.search = ""; state.selectedTeamId = null; state.excludeCovid = true; d3.select("#team-filter").property("value", ""); d3.select("#exclude-covid").property("checked", true); updateSeasonOptions(); render(); });
+  d3.select("#reset-button").on("click", () => { state.search = ""; state.selectedTeamId = null; state.excludeCovid = true; state.attendanceMode = "raw"; d3.select("#team-filter").property("value", ""); d3.select("#exclude-covid").property("checked", true); d3.select("#attendance-mode").property("value", "raw"); updateSeasonOptions(); render(); });
   d3.select("#data-status").text(`${games.length.toLocaleString()} games + annual attendance loaded`);
   render();
   window.addEventListener("resize", render);
 }
 function render() {
   const seasonRecords = filteredRecords().filter(d => d.season === state.season);
-  const visible = seasonRecords.filter(d => d.attendance !== null && (!state.search || d.name.toLowerCase().includes(state.search.toLowerCase())));
-  d3.select("#teams-count").text(visible.length); d3.select("#games-count").text(d3.sum(seasonRecords, d => d.games).toLocaleString()); d3.select("#league-attendance").text(visible.length ? formatNumber(d3.mean(visible, d => d.attendance)) : "--");
+  const visible = seasonRecords.filter(d => metricValue(d) !== null && (!state.search || d.name.toLowerCase().includes(state.search.toLowerCase())));
+  d3.select("#teams-count").text(visible.length); d3.select("#games-count").text(d3.sum(seasonRecords, d => d.games).toLocaleString()); d3.select("#league-attendance").text(visible.length ? metricFormat(d3.mean(visible, metricValue)) : "--"); d3.select("#attendance-metric-label").text(metricLabel());
   const r = correlation(visible); d3.select("#correlation").text(r === null ? "--" : formatDecimal(r));
+  updateSeasonSlider();
   drawScatter(seasonRecords); drawTimeline(filteredRecords());
 }
 function updateSeasonOptions() {
@@ -148,5 +224,11 @@ function updateSeasonOptions() {
   if (!seasons.includes(state.season)) state.season = seasons[0];
   d3.select("#season-select").selectAll("option").data(seasons).join("option").attr("value", d => d).text(d => d);
   d3.select("#season-select").property("value", state.season);
+}
+function updateSeasonSlider() {
+  const seasons = seasonOptions();
+  const index = Math.max(0, seasons.indexOf(state.season));
+  d3.select("#season-slider").attr("max", Math.max(0, seasons.length - 1)).property("value", index);
+  d3.select("#season-slider-value").text(state.season || "--");
 }
 init().catch(error => { d3.select("#data-status").text("Could not load attendance data"); console.error(error); });

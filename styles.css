@@ -41,7 +41,14 @@ button:hover { background: #f08065; }
 .hint, .footnote { color: var(--muted); font-size: 12px; line-height: 1.45; max-width: 300px; margin: 0; }
 .chart-wrap { width: 100%; min-height: 410px; margin-top: 18px; }
 .secondary-card .chart-wrap { min-height: 320px; }
+.season-slider { display: grid; gap: 8px; margin-top: 4px; }
+.season-slider label { display: flex; justify-content: space-between; min-width: 0; color: var(--muted); font: 11px "DM Mono", monospace; text-transform: uppercase; letter-spacing: .08em; }
+.season-slider output { color: var(--ink); }
+.season-slider input { width: 100%; height: 24px; padding: 0; accent-color: var(--coral); background: transparent; }
 .footnote { max-width: none; border-top: 1px solid var(--line); padding-top: 12px; }
+.coverage-note { margin-top: 12px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.coverage-note summary { cursor: pointer; color: var(--ink); font-family: "DM Mono", monospace; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+.coverage-note p { margin: 8px 0 0; white-space: pre-line; }
 .axis path, .axis line { stroke: #bec8c3; }
 .axis text { fill: var(--muted); font: 11px "DM Mono", monospace; }
 .grid line { stroke: #e4e7e1; }
@@ -49,9 +56,9 @@ button:hover { background: #f08065; }
 .axis-title { fill: var(--muted); font: 11px "DM Mono", monospace; text-transform: uppercase; letter-spacing: .08em; }
 .dot { stroke: var(--card); stroke-width: 2px; cursor: pointer; transition: opacity .2s, stroke-width .2s; }
 .dot:hover, .dot.selected { stroke: var(--coral); stroke-width: 4px; }
-.line-attendance { fill: none; stroke-width: 3px; }
-.line-wins { fill: none; stroke: var(--coral); stroke-width: 2px; stroke-dasharray: 5 4; }
-.timeline-point { stroke: var(--card); stroke-width: 2px; }
+.timeline-bar { cursor: pointer; transition: opacity .2s; }
+.timeline-bar:hover { opacity: .78; }
+.wins-legend text { font: 11px "DM Mono", monospace; fill: var(--muted); }
 .legend text { font: 11px "DM Mono", monospace; fill: var(--muted); }
 .tooltip { position: fixed; pointer-events: none; opacity: 0; background: var(--ink); color: white; border-left: 3px solid var(--yellow); padding: 12px 14px; border-radius: 3px; font-size: 12px; line-height: 1.55; box-shadow: 0 8px 25px #18252b2b; z-index: 2; }
 .tooltip strong { display: block; color: var(--yellow); font-size: 14px; margin-bottom: 3px; }
