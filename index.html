@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Courtside Pull</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="page-shell">
+    <header class="masthead">
+      <div>
+        <p class="eyebrow">NBA attendance study / 1946 to 2026</p>
+        <h1>Courtside Pull</h1>
+        <p class="intro">Do winning teams draw bigger crowds? Compare regular-season wins with average home attendance, then follow a team across seasons.</p>
+      </div>
+      <div class="data-note"><span class="status-dot"></span><span id="data-status">Loading attendance data</span></div>
+    </header>
+
+    <section class="controls" aria-label="Visualization filters">
+      <label>
+        <span>Season</span>
+        <select id="season-select"></select>
+      </label>
+      <label class="team-search">
+        <span>Find a team</span>
+        <input id="team-filter" type="search" placeholder="Search teams" autocomplete="off">
+      </label>
+      <label class="toggle-control">
+        <span>Data filter</span>
+        <span class="toggle-label"><input id="exclude-covid" type="checkbox" checked> Exclude 2020-21 COVID season</span>
+      </label>
+      <button id="reset-button" type="button">Reset view</button>
+    </section>
+
+    <section class="summary-grid" aria-label="Dataset summary">
+      <div><span class="metric-label">Teams shown</span><strong id="teams-count">--</strong></div>
+      <div><span class="metric-label">Season games</span><strong id="games-count">--</strong></div>
+      <div><span class="metric-label">Average attendance</span><strong id="league-attendance">--</strong></div>
+      <div><span class="metric-label">Correlation</span><strong id="correlation">--</strong></div>
+    </section>
+
+    <section class="viz-card primary-card">
+      <div class="section-heading">
+        <div><p class="kicker">The relationship</p><h2>Wins and crowd size</h2></div>
+        <p class="hint">Click a dot to trace that team below. Hover for the exact values.</p>
+      </div>
+      <div id="scatter-chart" class="chart-wrap"></div>
+      <p class="footnote">Each dot is a team in the selected season. Attendance uses the annual sources for 2000-01 through 2025-26; seasons outside those sources are omitted.</p>
+    </section>
+
+    <section class="viz-card secondary-card">
+      <div class="section-heading">
+        <div><p class="kicker">The long view</p><h2 id="timeline-title">Select a team</h2></div>
+        <p class="hint">Attendance uses the left axis. Wins use the right axis.</p>
+      </div>
+      <div id="timeline-chart" class="chart-wrap"></div>
+    </section>
+  </main>
+  <div id="tooltip" class="tooltip" role="status" aria-hidden="true"></div>
+  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+  <script src="team-colors.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

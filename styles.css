@@ -1,0 +1,58 @@
+:root {
+  --ink: #18252b;
+  --muted: #6d7a7e;
+  --paper: #f4f0e8;
+  --card: #fffdf8;
+  --line: #d9ddd7;
+  --coral: #e66d54;
+  --teal: #147d7b;
+  --yellow: #efbd4c;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: radial-gradient(circle at 90% 0%, #dce8df 0, transparent 34%), var(--paper); color: var(--ink); font-family: "Space Grotesk", sans-serif; }
+.page-shell { max-width: 1180px; margin: 0 auto; padding: 42px 28px 72px; }
+.masthead { display: flex; justify-content: space-between; gap: 36px; align-items: flex-end; padding-bottom: 34px; }
+.eyebrow, .kicker, .metric-label, label span { font-family: "DM Mono", monospace; text-transform: uppercase; letter-spacing: .08em; font-size: 11px; }
+.eyebrow, .kicker { color: var(--coral); margin: 0 0 10px; }
+h1, h2, p { margin-top: 0; }
+h1 { font-size: clamp(42px, 7vw, 80px); line-height: .9; letter-spacing: -.06em; margin-bottom: 18px; }
+h2 { font-size: 27px; letter-spacing: -.04em; margin-bottom: 0; }
+.intro { max-width: 550px; line-height: 1.55; color: #4e5c60; margin-bottom: 0; }
+.data-note { display: flex; align-items: center; gap: 9px; color: var(--muted); white-space: nowrap; font: 11px "DM Mono", monospace; }
+.status-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--yellow); }
+.controls { display: flex; align-items: end; gap: 18px; padding: 20px; background: var(--ink); color: white; border-radius: 5px; margin-bottom: 18px; }
+label { display: grid; gap: 8px; min-width: 190px; }
+label span { color: #b6c6c4; }
+select, input, button { height: 42px; border: 0; border-radius: 3px; font: 500 14px "Space Grotesk", sans-serif; }
+select, input { padding: 0 12px; color: var(--ink); background: var(--card); }
+.team-search { flex: 1; }
+.toggle-control { min-width: 220px; }
+.toggle-label { display: flex; align-items: center; gap: 8px; color: white; text-transform: none; letter-spacing: 0; font: 500 13px "Space Grotesk", sans-serif; white-space: nowrap; }
+.toggle-label input { width: 16px; height: 16px; accent-color: var(--coral); }
+button { padding: 0 18px; cursor: pointer; background: var(--coral); color: white; }
+button:hover { background: #f08065; }
+.summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; margin-bottom: 18px; background: var(--line); border: 1px solid var(--line); }
+.summary-grid > div { background: var(--card); padding: 18px 20px; }
+.metric-label { display: block; color: var(--muted); margin-bottom: 10px; }
+.summary-grid strong { font-size: 23px; letter-spacing: -.04em; }
+.viz-card { background: var(--card); border: 1px solid var(--line); padding: 24px 24px 18px; margin-bottom: 18px; }
+.section-heading { display: flex; justify-content: space-between; gap: 20px; align-items: end; }
+.hint, .footnote { color: var(--muted); font-size: 12px; line-height: 1.45; max-width: 300px; margin: 0; }
+.chart-wrap { width: 100%; min-height: 410px; margin-top: 18px; }
+.secondary-card .chart-wrap { min-height: 320px; }
+.footnote { max-width: none; border-top: 1px solid var(--line); padding-top: 12px; }
+.axis path, .axis line { stroke: #bec8c3; }
+.axis text { fill: var(--muted); font: 11px "DM Mono", monospace; }
+.grid line { stroke: #e4e7e1; }
+.grid path { stroke: none; }
+.axis-title { fill: var(--muted); font: 11px "DM Mono", monospace; text-transform: uppercase; letter-spacing: .08em; }
+.dot { stroke: var(--card); stroke-width: 2px; cursor: pointer; transition: opacity .2s, stroke-width .2s; }
+.dot:hover, .dot.selected { stroke: var(--coral); stroke-width: 4px; }
+.line-attendance { fill: none; stroke-width: 3px; }
+.line-wins { fill: none; stroke: var(--coral); stroke-width: 2px; stroke-dasharray: 5 4; }
+.timeline-point { stroke: var(--card); stroke-width: 2px; }
+.legend text { font: 11px "DM Mono", monospace; fill: var(--muted); }
+.tooltip { position: fixed; pointer-events: none; opacity: 0; background: var(--ink); color: white; border-left: 3px solid var(--yellow); padding: 12px 14px; border-radius: 3px; font-size: 12px; line-height: 1.55; box-shadow: 0 8px 25px #18252b2b; z-index: 2; }
+.tooltip strong { display: block; color: var(--yellow); font-size: 14px; margin-bottom: 3px; }
+@media (max-width: 700px) { .page-shell { padding: 28px 15px 50px; } .masthead, .section-heading { display: block; } .data-note { margin-top: 22px; } .controls { display: grid; } label { min-width: 0; } .toggle-label { white-space: normal; } .summary-grid { grid-template-columns: repeat(2, 1fr); } .viz-card { padding: 18px 12px 14px; } .hint { margin-top: 12px; } .chart-wrap { min-height: 330px; } }
